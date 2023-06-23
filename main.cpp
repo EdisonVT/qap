@@ -63,6 +63,8 @@ Solucion solucionInicial(int N, const vector<vector<int>>& distancia, const vect
 // Función para generar una vecindad de soluciones mediante el intercambio de ubicaciones
 std::vector<Solucion> generarNeighborhood(int N, const vector<vector<int>>& distancia, const vector<vector<int>>& flujo, const Solucion& actual) {
     std::vector<Solucion> neighborhood;
+
+    //se generan todos los swap posibles
     for (int i = 0; i < N; i++) {
         for (int j = i + 1; j < N; j++) {
             std::vector<int> nuevoOrden = actual.orden;
@@ -76,11 +78,22 @@ std::vector<Solucion> generarNeighborhood(int N, const vector<vector<int>>& dist
 }
 
 Solucion mejorVecino(const std::vector<Solucion>& neighborhood, const std::vector<std::vector<int>>& tabuList) {
+
+    //primer vecino se toma como primer mejor vecino
     Solucion mejorVecino = neighborhood[0];
     for (const Solucion& neighbor : neighborhood) {
-        if (std::find(tabuList[neighbor.swap[0]].begin(), tabuList[neighbor.swap[0]].end(), neighbor.swap[1]) == tabuList[neighbor.swap[0]].end() &&
-            std::find(tabuList[neighbor.swap[1]].begin(), tabuList[neighbor.swap[1]].end(), neighbor.swap[0]) == tabuList[neighbor.swap[1]].end() &&
-            neighbor.costo < mejorVecino.costo) {
+
+        bool tabu= false;
+
+        //revisar lista tabu
+        for (int i=0; i< tabuList.size(); i++){
+            if ((tabuList[i][0]==neighbor.swap[0] && tabuList[i][1]==neighbor.swap[1]) || (tabuList[i][0]==neighbor.swap[1] && tabuList[i][1]==neighbor.swap[0])){
+                tabu= true;
+            }
+        }
+
+        //comparar candidato
+        if (!tabu && neighbor.costo < mejorVecino.costo) {
             mejorVecino=neighbor;
         }
     }
@@ -101,7 +114,7 @@ void actualizarTabuList(int largo, std::vector<std::vector<int>>& tabuList, cons
 
 // Función de búsqueda tabú para resolver el problema de asignación cuadrática
 Solucion tabuSearch(int N, const vector<vector<int>>& distancia, const vector<vector<int>>& flujo) {
-    const int maxIterations = 10; // Número máximo de iteraciones
+    const int maxIterations = 100; // Número máximo de iteraciones
     
     //solucion inicial
     Solucion mejorSolucion = solucionInicial(N,distancia, flujo);
