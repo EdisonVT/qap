@@ -1,0 +1,21 @@
+CC = g++
+CFLAGS = -Wall -g
+ 
+# ****************************************************
+# Targets needed to bring the executable up to date
+ 
+main: main.cpp
+    $(CC) $(CFLAGS) -o main main.cpp
+ 
+# The main.o target can be written more simply
+ 
+main.cpp: main.cpp
+    $(CC) $(CFLAGS) -c main.cpp
+    
+main2: main2.cpp
+    $(CC) $(CFLAGS) -o main2 main2.cpp
+ 
+# The main.o target can be written more simply
+ 
+main2.cpp: main2.cpp
+    $(CC) $(CFLAGS) -c main2.cpp
