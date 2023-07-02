@@ -38,14 +38,79 @@ int costo(int N, const vector<vector<int>>& distancia,const vector<vector<int>>&
     return costo;
 }
 
+int costo_inicial(int N, const vector<vector<int>>& distancia,const vector<vector<int>>& flujo, const vector<int>& orden, const vector<bool>& asignado) {
+    int cost = 0;
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            if (asignado[orden[i]] && asignado[orden[j]]){
+                int dist = calDistancia(distancia, orden[i], orden[j]);
+                int flj = calFlujo(flujo, i, j);
+                int temp = dist * flj;
+                cost += temp;
+            }
+        }
+    }
+    if (std::count (asignado.begin(), asignado.end(), true)<2){
+        cost = costo(N, distancia, flujo, orden);
+    }
+    return cost;
+}
+
 Solucion solucionInicial(int N, const vector<vector<int>>& distancia, const vector<vector<int>>& flujo) {
-    //lista con lugares de los objetos
     std::vector<int> orden(N);
-    std::iota(orden.begin(), orden.end(), 0);
+    std::vector<bool> asignado(N, false);
 
-    //randomizar lista
-    std::random_shuffle(orden.begin(), orden.end());
+    //vectores con las sumas de flujos y distancias totales
+    std::vector<int> flowSum;
+	std::vector<int> distSum;
 
+	for (unsigned int i = 0; i < flujo.size(); i++) {
+		int total = 0;
+		for (unsigned int j = 0; j < flujo[i].size(); j++) {
+			total += flujo[i][j];
+		}
+		flowSum.push_back(total);
+	}
+	for (unsigned int i = 0; i < distancia.size(); i++) {
+		int total = 0;
+		for (unsigned int j = 0; j < distancia[i].size(); j++) {
+			total += distancia[i][j];
+		}
+		distSum.push_back(total);
+	}
+
+    //calculo de minimo flujo y maxima distancia
+	std::vector<int>::iterator fmin = std::min_element(flowSum.begin(), flowSum.end());
+	std::vector<int>::iterator dmax = std::max_element(distSum.begin(), distSum.end());
+
+    //como punto inicial se asigna a la posicion mas alejada la instalacion con menos flujos 
+    int init_i= int(std::distance(distSum.begin(), dmax));
+    int init_j= int(std::distance(flowSum.begin(), fmin));
+
+    orden[init_i]=init_j;
+    asignado[init_j]=true;
+	
+    for (int i = 0; i < N; i++) {
+        if (i==init_i){
+            continue;
+        }
+        int mejorUbicacion = -1;
+        int minCosto = std::numeric_limits<int>::max();
+        for (int j = 0; j < N; j++) {
+            if (!asignado[j]) {
+                orden[i]=j;
+                asignado[j]=true;
+                int costo = costo_inicial(N, distancia, flujo, orden, asignado);
+                if (costo < minCosto) {
+                    minCosto = costo;
+                    mejorUbicacion = j;
+                }
+                asignado[j]=false;
+            }
+        }
+        orden[i] = mejorUbicacion;
+        asignado[mejorUbicacion] = true;
+    }
     std::cout << "Initial Solution: ";
     for (int i = 0; i < N; i++) {
         std::cout << orden[i] << " ";
@@ -54,16 +119,13 @@ Solucion solucionInicial(int N, const vector<vector<int>>& distancia, const vect
     std::cout << "Cost: " << costo(N, distancia, flujo, orden) << std::endl;
     std::cout << "\n";
 
-    //costo orden inicial
     int cost = costo(N, distancia, flujo, orden);
-
     return {orden, cost};
 }
 
 // Función para generar una vecindad de soluciones mediante el intercambio de ubicaciones
 std::vector<Solucion> generarNeighborhood(int N, const vector<vector<int>>& distancia, const vector<vector<int>>& flujo, const Solucion& actual) {
     std::vector<Solucion> neighborhood;
-
     //se generan todos los swap posibles
     for (int i = 0; i < N; i++) {
         for (int j = i + 1; j < N; j++) {
@@ -77,7 +139,7 @@ std::vector<Solucion> generarNeighborhood(int N, const vector<vector<int>>& dist
     return neighborhood;
 }
 
-Solucion mejorVecino(const std::vector<Solucion>& neighborhood, const std::vector<std::vector<int>>& tabuList) {
+Solucion mejorVecino(const std::vector<Solucion>& neighborhood, std::vector<std::vector<int>>& tabuList, int mejorCosto) {
 
     //primer vecino se toma como primer mejor vecino
     Solucion mejorVecino = neighborhood[0];
@@ -89,6 +151,8 @@ Solucion mejorVecino(const std::vector<Solucion>& neighborhood, const std::vecto
         for (int i=0; i< tabuList.size(); i++){
             if ((tabuList[i][0]==neighbor.swap[0] && tabuList[i][1]==neighbor.swap[1]) || (tabuList[i][0]==neighbor.swap[1] && tabuList[i][1]==neighbor.swap[0])){
                 tabu= true;
+            }else if (neighbor.costo < mejorCosto * 0.85){
+                tabuList.erase(tabuList.begin()+i);
             }
         }
 
@@ -113,30 +177,47 @@ void actualizarTabuList(int largo, std::vector<std::vector<int>>& tabuList, cons
 }
 
 // Función de búsqueda tabú para resolver el problema de asignación cuadrática
-Solucion tabuSearch(int N, const vector<vector<int>>& distancia, const vector<vector<int>>& flujo) {
-    const int maxIterations = 100; // Número máximo de iteraciones
+Solucion tabuSearch(int N, const vector<vector<int>>& distancia, const vector<vector<int>>& flujo, int tabuLargo, int iteraciones) {
+    const int maxIterations = iteraciones; // Número máximo de iteraciones
     
-    //solucion inicial
+    //solucion inicial greedy
     Solucion mejorSolucion = solucionInicial(N,distancia, flujo);
     Solucion actual = mejorSolucion;
 
     //lista tabu
     std::vector<std::vector<int>> tabuList;
 
-    //busqueda greedy
+    //busqueda tabu
     int iteration = 0;
+    int iter_sin_mejoras=0;
     while (iteration < maxIterations) {
 
-        //generar vecindad
-        std::vector<Solucion> neighborhood = generarNeighborhood(N,distancia, flujo, actual);
-        
-        //obtener mejor vecino
-        Solucion mejorvecino = mejorVecino(neighborhood, tabuList);
+        Solucion mejorvecino;
 
-        //actualizar lista tabu
-        actualizarTabuList(3, tabuList, mejorvecino);
+        if(iter_sin_mejoras<(maxIterations/2)+1){
+            //generar vecindad
+            std::vector<Solucion> neighborhood = generarNeighborhood(N,distancia, flujo, actual);
+            
+            //obtener mejor vecino
+            mejorvecino = mejorVecino(neighborhood, tabuList, mejorSolucion.costo);
+
+            //actualizar lista tabu
+            actualizarTabuList(tabuLargo, tabuList, mejorvecino);
+        }
+        else{
+            iter_sin_mejoras=0;
+            std::vector<int> nuevoOrden = actual.orden;
+            std::rotate(nuevoOrden.begin(), nuevoOrden.begin()+nuevoOrden.size()/2, nuevoOrden.end());
+            int cost = costo(N, distancia, flujo, nuevoOrden);
+            mejorvecino= {nuevoOrden, cost};
+        }
+
         if (mejorvecino.costo < mejorSolucion.costo) {
             mejorSolucion = mejorvecino;
+            iter_sin_mejoras=0;
+        }
+        else{
+            iter_sin_mejoras++;
         }
         actual = mejorvecino;
         iteration++;
@@ -148,7 +229,10 @@ Solucion tabuSearch(int N, const vector<vector<int>>& distancia, const vector<ve
 int main(int argc, char *args[]){
 
     //nombre archivo
-    string archivo= args[1];
+    string archivo= args[2];
+
+    int iteraciones= stoi(args[3]);
+    int tabuLargo= stoi (args[1]);
 
     //abrir archivo
     ifstream File;
@@ -200,7 +284,7 @@ int main(int argc, char *args[]){
 	std::srand(std::time(nullptr));
 
     //tabu search
-    Solucion solucion = tabuSearch(n, distancia, flujo);
+    Solucion solucion = tabuSearch(n, distancia, flujo, tabuLargo, iteraciones);
 
     //terminar medida de tiempo
     auto end = std::chrono::steady_clock::now();

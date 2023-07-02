@@ -13,6 +13,7 @@ using namespace std;
 struct Solucion {
     std::vector<int> orden;
     int costo;
+    std::vector<int> swap;
 };
 
 
@@ -28,8 +29,8 @@ int costo(int N, const vector<vector<int>>& distancia,const vector<vector<int>>&
     int costo = 0;
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < N; j++) {
-            int dist = calDistancia(distancia, i, j);
-            int flj = calFlujo(flujo, orden[i], orden[j]);
+            int dist = calDistancia(distancia, orden[i], orden[j]);
+            int flj = calFlujo(flujo, i, j);
             int temp = dist * flj;
             costo += temp;
         }
@@ -38,47 +39,61 @@ int costo(int N, const vector<vector<int>>& distancia,const vector<vector<int>>&
 }
 
 Solucion solucionInicial(int N, const vector<vector<int>>& distancia, const vector<vector<int>>& flujo) {
+    //lista con lugares de los objetos
     std::vector<int> orden(N);
-    std::vector<bool> asignado(N, false);
+    std::iota(orden.begin(), orden.end(), 0);
+
+    //randomizar lista
+    std::random_shuffle(orden.begin(), orden.end());
+
+    std::cout << "Initial Solution: ";
     for (int i = 0; i < N; i++) {
-        int mejorUbicacion = -1;
-        int minCosto = std::numeric_limits<int>::max();
-        for (int j = 0; j < N; j++) {
-            if (!asignado[j]) {
-                int cost = costo(N, distancia, flujo, orden);
-                if (cost < minCosto) {
-                    minCosto = cost;
-                    mejorUbicacion = j;
-                }
-            }
-        }
-        orden[i] = mejorUbicacion;
-        asignado[mejorUbicacion] = true;
+        std::cout << orden[i] << " ";
     }
+    std::cout << std::endl;
+    std::cout << "Cost: " << costo(N, distancia, flujo, orden) << std::endl;
+    std::cout << "\n";
+
+    //costo orden inicial
     int cost = costo(N, distancia, flujo, orden);
+
     return {orden, cost};
 }
 
 // Función para generar una vecindad de soluciones mediante el intercambio de ubicaciones
 std::vector<Solucion> generarNeighborhood(int N, const vector<vector<int>>& distancia, const vector<vector<int>>& flujo, const Solucion& actual) {
     std::vector<Solucion> neighborhood;
+
+    //se generan todos los swap posibles
     for (int i = 0; i < N; i++) {
         for (int j = i + 1; j < N; j++) {
             std::vector<int> nuevoOrden = actual.orden;
             std::swap(nuevoOrden[i], nuevoOrden[j]);
             int cost = costo(N, distancia, flujo, nuevoOrden);
-            neighborhood.push_back({nuevoOrden, cost});
+            std::vector<int> swap = {i, j};
+            neighborhood.push_back({nuevoOrden, cost, swap});
         }
     }
     return neighborhood;
 }
 
 Solucion mejorVecino(const std::vector<Solucion>& neighborhood, const std::vector<std::vector<int>>& tabuList) {
+
+    //primer vecino se toma como primer mejor vecino
     Solucion mejorVecino = neighborhood[0];
     for (const Solucion& neighbor : neighborhood) {
-        if (std::find(tabuList[neighbor.orden[0]].begin(), tabuList[neighbor.orden[0]].end(), neighbor.orden[1]) == tabuList[neighbor.orden[0]].end() &&
-            std::find(tabuList[neighbor.orden[1]].begin(), tabuList[neighbor.orden[1]].end(), neighbor.orden[0]) == tabuList[neighbor.orden[1]].end() &&
-            neighbor.costo < mejorVecino.costo) {
+
+        bool tabu= false;
+
+        //revisar lista tabu
+        for (int i=0; i< tabuList.size(); i++){
+            if ((tabuList[i][0]==neighbor.swap[0] && tabuList[i][1]==neighbor.swap[1]) || (tabuList[i][0]==neighbor.swap[1] && tabuList[i][1]==neighbor.swap[0])){
+                tabu= true;
+            }
+        }
+
+        //comparar candidato
+        if (!tabu && neighbor.costo < mejorVecino.costo) {
             mejorVecino=neighbor;
         }
     }
@@ -86,22 +101,14 @@ Solucion mejorVecino(const std::vector<Solucion>& neighborhood, const std::vecto
 }
 
 
-void actualizarTabuList(int N, std::vector<std::vector<int>>& tabuList, const Solucion& solucion) {
-    const int tenure = 3; // Tamaño de la lista tabú
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++) {
-            if (std::find(tabuList[i].begin(), tabuList[i].end(), j) != tabuList[i].end()) {
-                tabuList[i].erase(std::find(tabuList[i].begin(), tabuList[i].end(), j));
-            }
-        }
-    }
-    tabuList[solucion.orden[0]].push_back(solucion.orden[1]);
-    tabuList[solucion.orden[1]].push_back(solucion.orden[0]);
-    if (tabuList[solucion.orden[0]].size() > tenure) {
-        tabuList[solucion.orden[0]].erase(tabuList[solucion.orden[0]].begin());
-    }
-    if (tabuList[solucion.orden[1]].size() > tenure) {
-        tabuList[solucion.orden[1]].erase(tabuList[solucion.orden[1]].begin());
+void actualizarTabuList(int largo, std::vector<std::vector<int>>& tabuList, const Solucion& solucion) {
+    
+    //se agregan en la lista tabu (lista de listas) los intercambios de lugares
+    tabuList.push_back(solucion.swap);
+
+    //si los objetos que se movieron tienen mas de x movimientos tabues, se eliminan los mas antiguos
+    if (tabuList.size() > largo) {
+        tabuList.erase(tabuList.begin());
     }
 }
 
@@ -114,7 +121,7 @@ Solucion tabuSearch(int N, const vector<vector<int>>& distancia, const vector<ve
     Solucion actual = mejorSolucion;
 
     //lista tabu
-    std::vector<std::vector<int>> tabuList(1);
+    std::vector<std::vector<int>> tabuList;
 
     //busqueda greedy
     int iteration = 0;
@@ -125,15 +132,16 @@ Solucion tabuSearch(int N, const vector<vector<int>>& distancia, const vector<ve
         
         //obtener mejor vecino
         Solucion mejorvecino = mejorVecino(neighborhood, tabuList);
-        
+
         //actualizar lista tabu
-        actualizarTabuList(N, tabuList, mejorvecino);
+        actualizarTabuList(3, tabuList, mejorvecino);
         if (mejorvecino.costo < mejorSolucion.costo) {
             mejorSolucion = mejorvecino;
         }
         actual = mejorvecino;
         iteration++;
     }
+
     return mejorSolucion;
 }
 
@@ -142,9 +150,7 @@ int main(int argc, char *args[]){
     //nombre archivo
     string archivo= args[1];
 
-    std::cout << archivo+".dat";
-    std::cout << "\n";
-
+    //abrir archivo
     ifstream File;
     File.open(archivo+".dat");
 
@@ -167,6 +173,61 @@ int main(int argc, char *args[]){
         }
     }
     File.close();
+
+    //pasar matrices a tipo vector
+    std::vector<std::vector<int>> distancia;
+
+    for (int i = 0; i < n; i++) {
+        std::vector<int> row;
+        for (int j = 0; j < n; j++) {
+            row.push_back(data2[i][j]);
+        }
+        distancia.push_back(row);
+    }
+
+    std::vector<std::vector<int>> flujo;
+
+    for (int i = 0; i < n; i++) {
+        std::vector<int> row;
+        for (int j = 0; j < n; j++) {
+            row.push_back(data1[i][j]);
+        }
+        flujo.push_back(row);
+    }
+
+    //iniciar medida de tiempo
+    auto start = std::chrono::steady_clock::now();
+	std::srand(std::time(nullptr));
+
+    //tabu search
+    Solucion solucion = tabuSearch(n, distancia, flujo);
+
+    //terminar medida de tiempo
+    auto end = std::chrono::steady_clock::now();
+
+    //calculo tiempo ejecucion
+	auto diff = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+	double runtime = double(diff.count()) * 0.000001;
+
+    //entregar mejor solucion por consola
+    std::cout << "Best Solution: ";
+    for (int i = 0; i < n; i++) {
+        std::cout << solucion.orden[i] << " ";
+    }
+    std::cout << std::endl;
+    std::cout << "Cost: " << solucion.costo << std::endl;
+
+    //crear y escribir archivo output
+    ofstream file;
+    file.open(archivo+".out");
+    file << to_string(solucion.costo)+" "+ to_string(runtime)+"\n";
+    file << n;
+    file << "\n";
+    for (int i = 0; i < solucion.orden.size(); i++){
+            file << solucion.orden[i];
+            file << " ";
+    }
+    file.close();
 
     return 0;
 }
