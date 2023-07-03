@@ -29,9 +29,7 @@ int costo(int N, const vector<vector<int>>& distancia,const vector<vector<int>>&
     int costo = 0;
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < N; j++) {
-            int dist = calDistancia(distancia, orden[i], orden[j]);
-            int flj = calFlujo(flujo, i, j);
-            int temp = dist * flj;
+            int temp = calDistancia(distancia, orden[i], orden[j]) * calFlujo(flujo, i, j);
             costo += temp;
         }
     }
@@ -43,16 +41,12 @@ int costo_inicial(int N, const vector<vector<int>>& distancia,const vector<vecto
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < N; j++) {
             if (asignado[orden[i]] && asignado[orden[j]]){
-                int dist = calDistancia(distancia, orden[i], orden[j]);
-                int flj = calFlujo(flujo, i, j);
-                int temp = dist * flj;
+                int temp = calDistancia(distancia, orden[i], orden[j]) * calFlujo(flujo, i, j);
                 cost += temp;
             }
         }
     }
-    if (std::count (asignado.begin(), asignado.end(), true)<2){
-        cost = costo(N, distancia, flujo, orden);
-    }
+    
     return cost;
 }
 
@@ -111,6 +105,8 @@ Solucion solucionInicial(int N, const vector<vector<int>>& distancia, const vect
         orden[i] = mejorUbicacion;
         asignado[mejorUbicacion] = true;
     }
+
+    /*
     std::cout << "Initial Solution: ";
     for (int i = 0; i < N; i++) {
         std::cout << orden[i] << " ";
@@ -118,6 +114,7 @@ Solucion solucionInicial(int N, const vector<vector<int>>& distancia, const vect
     std::cout << std::endl;
     std::cout << "Cost: " << costo(N, distancia, flujo, orden) << std::endl;
     std::cout << "\n";
+    */
 
     int cost = costo(N, distancia, flujo, orden);
     return {orden, cost};
@@ -209,6 +206,7 @@ Solucion tabuSearch(int N, const vector<vector<int>>& distancia, const vector<ve
             std::vector<int> nuevoOrden = actual.orden;
             std::rotate(nuevoOrden.begin(), nuevoOrden.begin()+nuevoOrden.size()/2, nuevoOrden.end());
             int cost = costo(N, distancia, flujo, nuevoOrden);
+            tabuList.clear();
             mejorvecino= {nuevoOrden, cost};
         }
 
@@ -229,10 +227,9 @@ Solucion tabuSearch(int N, const vector<vector<int>>& distancia, const vector<ve
 int main(int argc, char *args[]){
 
     //nombre archivo
-    string archivo= args[2];
+    string archivo= args[1];
 
-    int iteraciones= stoi(args[3]);
-    int tabuLargo= stoi (args[1]);
+    int iteraciones= stoi(args[2]);
 
     //abrir archivo
     ifstream File;
@@ -241,7 +238,9 @@ int main(int argc, char *args[]){
     //tamano instancia
     unsigned int n;
     File >> n;
-    
+
+    int tabuLargo= 3*(n/5);
+
     //matrices
     int data1 [n][n];
     int data2 [n][n];
@@ -281,7 +280,6 @@ int main(int argc, char *args[]){
 
     //iniciar medida de tiempo
     auto start = std::chrono::steady_clock::now();
-	std::srand(std::time(nullptr));
 
     //tabu search
     Solucion solucion = tabuSearch(n, distancia, flujo, tabuLargo, iteraciones);
@@ -293,6 +291,7 @@ int main(int argc, char *args[]){
 	auto diff = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 	double runtime = double(diff.count()) * 0.000001;
 
+    /*
     //entregar mejor solucion por consola
     std::cout << "Best Solution: ";
     for (int i = 0; i < n; i++) {
@@ -300,6 +299,7 @@ int main(int argc, char *args[]){
     }
     std::cout << std::endl;
     std::cout << "Cost: " << solucion.costo << std::endl;
+    */
 
     //crear y escribir archivo output
     ofstream file;
